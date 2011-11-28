@@ -1,0 +1,17 @@
+[OPTIONS]
+Auto Index=Yes
+Compatibility=1.1 or later
+Compiled file=crazyeights.chm
+Contents file=CrazyEights.hhc
+Default topic=crazyeights.htm
+Display compile progress=No
+Index file=CrazyEights.hhk
+Language=0x409 English (United States)
+
+
+[FILES]
+crazyeights.htm
+history.htm
+
+[INFOTYPES]
+
