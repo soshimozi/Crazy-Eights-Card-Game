@@ -1,0 +1,25 @@
+TODO:
+Slow down opponent animation and turns.
+Slow down card animation when cursoring over.
+Add delay when cursoring over to avoid the dreaded each card is drawn as you go across them (delay, and slow down animation)
+Convert to canvas / silverlight application.
+Change AI to play highest card.
+Add a log with actions that occured.
+Implement an undo scheme.
+Show cards organized.
+
+BUGS:
+[x] Eights not handled correctly with opponents.
+[x] Reshuffle should happen as soon as card level is 0, not when user clicks deal and card level is 0.
+
+[x] Twos not handled correctly.  Allow user a choice to play a two if they have one, or penalize them by drawing two cards.
+
+[x] when winning a hand with a duece, player should not draw two cards - those go against his/her score
+[x] when an opponent evalutes for a move, they should not choose an eight if other plays are available
+[x] Allows user to play an eight when he/she has other suit cards
+[x] Draw two logic should not apply when deck is empty
+[ ] When opponent calculates proper suit for wildcard it should not count eights in the suit count
+
+[ ] Detect and Fix stalemate (by reshuffling?)
+[ ] Fix Scoring
+[ ] Add Draw Card animation
