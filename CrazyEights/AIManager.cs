@@ -1,12 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Linq;
 using CrazyEightsCardLib;
 
 namespace CrazyEights
 {
-    class AIManager
+    class AiManager
     {
         public class MoveInfo
         {
@@ -36,85 +33,79 @@ namespace CrazyEights
             //      play matching suit
             //    else
             //      play random matching suit or rank
-            MoveInfo info = new MoveInfo();
+            var info = new MoveInfo {DrawCard = false, WildCardUsed = false, SelectedCard = null};
 
-            info.DrawCard = false;
-            info.WildCardUsed = false;
-            info.SelectedCard = null;
 
-            Card topCard = deckManager.Table[deckManager.Table.Count - 1];
+            var topCard = deckManager.Table[deckManager.Table.Count - 1];
 
-            CardSuit matchSuit = wildSuit == CardSuit.None ? topCard.Suit : wildSuit;
-            Card eightCard = hand.FindEight();
-            Card duece = hand.FindRank(CardRank.Two);
+            var matchSuit = wildSuit == CardSuit.None ? topCard.Suit : wildSuit;
+            var eightCard = hand.FindEight();
+            var deuce = hand.FindRank(SpecialCard.DrawTwo);
 
-            // rules change if top card is an eight
-            if (topCard.Rank == CardRank.Eight)
+            switch (topCard.Rank)
             {
+                // rules change if top card is an eight
                 // if we can match rank, do so
                 // that will force a play of an eight
-                if (eightCard != null)
-                {
+                case SpecialCard.WildCard when eightCard != null:
                     info.SelectedCard = eightCard;
-                }
-                else if (hand.GetSuitCount(matchSuit) > 0)
-                {
+                    break;
+                case SpecialCard.WildCard when hand.GetSuitCount(matchSuit) > 0:
                     // get matching suit (order by rank)
                     info.SelectedCard = hand.Cards.Where(c => c.Suit == matchSuit).OrderBy(c1 => c1.Rank).FirstOrDefault();
-                }
-                else
-                {
+                    break;
+                case SpecialCard.WildCard:
                     info.DrawCard = true;
-                }
-            }
-            else if (topCard.Rank == CardRank.Two && duece != null)
-            {
-                // play the duece on a draw two
-                info.SelectedCard = duece;
-            } 
-            else
-            {
-                // get suit count, without eights
-                var suitCount = hand.Cards.Count(c => c.Suit == matchSuit && c.Rank != CardRank.Eight);
-                var rankCount = hand.Cards.Count(c => c.Rank == topCard.Rank);
+                    break;
+                case SpecialCard.DrawTwo when deuce != null:
+                    // play the deuce on a draw two
+                    info.SelectedCard = deuce;
+                    break;
+                default:
+                {
+                    // get suit count, without eights
+                    var suitCount = hand.Cards.Count(c => c.Suit == matchSuit && c.Rank != SpecialCard.WildCard);
+                    var rankCount = hand.Cards.Count(c => c.Rank == topCard.Rank);
 
-                // no eight, free to play as you wish
-                if (suitCount > rankCount)
-                {
-                    // get matching suit (order by rank)
-                    info.SelectedCard = 
-                        hand.Cards
-                        .Where(c => c.Suit == matchSuit && c.Rank != CardRank.Eight)
-                        .OrderBy(c1 => c1.Rank)
-                        .FirstOrDefault();
-                }
-                else if (rankCount > 0)
-                {
-                    // get matching rank
-                    info.SelectedCard = 
-                        hand.Cards
-                        .Where(c => c.Rank == topCard.Rank)
-                        .FirstOrDefault();
-                }
-                else
-                {
-                    // no matches above
-                    // see if we have an eight
-                    if (hand.Cards.Count(c => c.Rank == CardRank.Eight) > 0)
+                    // no eight, free to play as you wish
+                    if (suitCount > rankCount)
                     {
-                        // get first eight
-                        info.SelectedCard = hand.Cards.Where(c => c.Rank == CardRank.Eight).FirstOrDefault();
+                        // get matching suit (order by rank)
+                        info.SelectedCard = 
+                            hand.Cards
+                                .Where(c => c.Suit == matchSuit && c.Rank != SpecialCard.WildCard)
+                                .OrderBy(c1 => c1.Rank)
+                                .FirstOrDefault();
+                    }
+                    else if (rankCount > 0)
+                    {
+                        // get matching rank
+                        info.SelectedCard = 
+                            hand.Cards
+                                .FirstOrDefault(c => c.Rank == topCard.Rank);
                     }
                     else
                     {
-                        info.DrawCard = true;
+                        // no matches above
+                        // see if we have an eight
+                        if (hand.Cards.Count(c => c.Rank == SpecialCard.WildCard) > 0)
+                        {
+                            // get first eight
+                            info.SelectedCard = hand.Cards.FirstOrDefault(c => c.Rank == SpecialCard.WildCard);
+                        }
+                        else
+                        {
+                            info.DrawCard = true;
+                        }
                     }
+
+                    break;
                 }
             }
 
             if (info.SelectedCard != null)
             {
-                if (info.SelectedCard.Rank == CardRank.Eight)
+                if (info.SelectedCard.Rank == SpecialCard.WildCard)
                 {
                     info.WildCardUsed = true;
                     info.OverrideSuit = SelectOverrideSuit(hand);
@@ -184,7 +175,7 @@ namespace CrazyEights
         ////    //else
         ////    //{
         ////        bool haveEight = false;
-        ////        if (hand.RankCount(CardRank.Eight) > 0)
+        ////        if (hand.RankCount(SpecialCard.WildCard) > 0)
         ////        {
         ////            haveEight = true;
         ////        }

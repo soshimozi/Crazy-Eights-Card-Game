@@ -14,8 +14,7 @@ namespace CrazyEightsCardLib
 		/// </returns>
 		public bool HasEight()
 		{
-			return Cards
-                .Where(c => c.Rank == CardRank.Eight).FirstOrDefault() == null ? false : true;
+			return Cards.FirstOrDefault(c => c.Rank == SpecialCard.WildCard) != null;
 		}
 
 		/// <summary>
@@ -25,8 +24,7 @@ namespace CrazyEightsCardLib
 		public Card FindEight()
 		{
 			return Cards
-				.Where(c => c.Rank == CardRank.Eight)
-				.FirstOrDefault();
+                .FirstOrDefault(c => c.Rank == SpecialCard.WildCard);
 		}
 
 		/// <summary>
@@ -34,7 +32,7 @@ namespace CrazyEightsCardLib
 		/// </summary>
 		/// <param name="rank">The rank.</param>
 		/// <returns></returns>
-		public override int GetRankCount(CardRank rank)
+		public override int GetRankCount(SpecialCard rank)
 		{
 			return Cards
 				.Count(c => c.Rank == rank);
@@ -54,13 +52,12 @@ namespace CrazyEightsCardLib
 		/// <summary>
 		/// Finds the rank.
 		/// </summary>
-		/// <param name="cardRank">The card rank.</param>
+		/// <param name="specialCard">The card rank.</param>
 		/// <returns></returns>
-		public override Card FindRank(CardRank cardRank)
+		public override Card FindRank(SpecialCard specialCard)
 		{
 			return Cards
-				.Where(c => c.Rank == cardRank)
-				.FirstOrDefault();
+                .FirstOrDefault(c => c.Rank == specialCard);
 		}
 
 		/// <summary>
@@ -71,8 +68,7 @@ namespace CrazyEightsCardLib
 		public override Card FindSuit(CardSuit cardSuit)
 		{
 			return Cards
-				.Where(c => c.Suit == cardSuit)
-				.FirstOrDefault();
+                .FirstOrDefault(c => c.Suit == cardSuit);
 		}
 	}
 }

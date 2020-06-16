@@ -1,44 +1,24 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
 using CrazyEightsCardLib;
 
 namespace CrazyEights
 {
     public class GameData
     {
-        private CrazyEightDeckManager deckManager;
-        private CrazyEightsHand playerHand = new CrazyEightsHand();
-        private CrazyEightsHand[] _opponentsHand;
-
         public GameData(int opponents, int numDecks)
         {
-            _opponentsHand = new CrazyEightsHand[opponents];
-            for (int i = 0; i < opponents; i++)
+            OpponentsHands = new CrazyEightsHand[opponents];
+            for (var i = 0; i < opponents; i++)
             {
-                _opponentsHand[i] = new CrazyEightsHand();
+                OpponentsHands[i] = new CrazyEightsHand();
             }
 
-            deckManager = new CrazyEightDeckManager(numDecks);
+            DeckManager = new CrazyEightDeckManager(numDecks);
         }
 
-        public CrazyEightsHand[] OpponentsHands
-        {
-            get { return _opponentsHand; }
-            set { _opponentsHand = value; }
-        }
+        public CrazyEightsHand[] OpponentsHands { get; set; }
 
-        public CrazyEightDeckManager DeckManager
-        {
-            get { return deckManager; }
-            set { deckManager = value; }
-        }
+        public CrazyEightDeckManager DeckManager { get; set; }
 
-        public CrazyEightsHand PlayerHand
-        {
-            get { return playerHand; }
-            set { playerHand = value; }
-        }
-
+        public CrazyEightsHand PlayerHand { get; set; } = new CrazyEightsHand();
     }
 }

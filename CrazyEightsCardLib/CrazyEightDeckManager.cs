@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
+
 namespace CrazyEightsCardLib
 {
 	public class CrazyEightDeckManager
 	{
-		private Deck _deck;
-		private List<Card> _discardPile = new List<Card>();
-		private List<Card> _table = new List<Card>();
-		private int _numCards;
-		private int currentDrawCard;
+		private readonly int _numCards;
+		private int _currentDrawCard;
 
 		/// <summary>
 		/// Gets a value indicating whether this instance is empty.
@@ -16,46 +14,22 @@ namespace CrazyEightsCardLib
 		/// <value>
 		///   <c>true</c> if this instance is empty; otherwise, <c>false</c>.
 		/// </value>
-		public bool IsEmpty
-		{
-			get
-			{
-				return this.currentDrawCard >= this._numCards;
-			}
-		}
+		public bool IsEmpty => _currentDrawCard >= _numCards;
 
-		/// <summary>
+        /// <summary>
 		/// Gets the table.
 		/// </summary>
-		public List<Card> Table
-		{
-			get
-			{
-				return this._table;
-			}
-		}
+		public List<Card> Table { get; } = new List<Card>();
 
 		/// <summary>
 		/// Gets the cards.
 		/// </summary>
-		public Deck Cards
-		{
-			get
-			{
-				return this._deck;
-			}
-		}
+		public Deck Cards { get; }
 
 		/// <summary>
 		/// Gets the discard pile.
 		/// </summary>
-		public List<Card> DiscardPile
-		{
-			get
-			{
-				return this._discardPile;
-			}
-		}
+		public List<Card> DiscardPile { get; } = new List<Card>();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CrazyEightDeckManager"/> class.
@@ -63,8 +37,8 @@ namespace CrazyEightsCardLib
 		/// <param name="numDecks">The num decks.</param>
 		public CrazyEightDeckManager(int numDecks)
 		{
-			this._numCards = numDecks * 52;
-			this._deck = new Deck(this._numCards);
+			_numCards = numDecks * 52;
+			Cards = new Deck(_numCards);
 		}
 
 		/// <summary>
@@ -72,73 +46,46 @@ namespace CrazyEightsCardLib
 		/// </summary>
 		public void Shuffle()
 		{
-			this.currentDrawCard = 0;
+			_currentDrawCard = 0;
 			DiscardPile.Clear();
 			Table.Clear();
 			Cards.Shuffle();
 		}
 
-		/// <summary>
-		/// Shuffles the specified exclusion list.
-		/// </summary>
-		/// <param name="exclusionList">The exclusion list.</param>
-		public void Shuffle(Card[] exclusionList)
-		{
-			DiscardPile.Clear();
-			Table.Clear();
-			Cards.Shuffle(exclusionList);
-			currentDrawCard = exclusionList.Length;
-		}
-
-		/// <summary>
+        /// <summary>
 		/// Deals the specified hands.
 		/// </summary>
 		/// <param name="hands">The hands.</param>
 		/// <param name="cardsInHand">The cards in hand.</param>
 		public void Deal(Hand[] hands, int cardsInHand)
 		{
-			if (hands.Length * cardsInHand > this._numCards)
+			if (hands.Length * cardsInHand > _numCards)
 			{
-				throw new ArgumentOutOfRangeException("hands", "Number of hands can't exceed deck size.");
+				throw new ArgumentOutOfRangeException(nameof(hands), "Number of hands can't exceed deck size.");
 			}
-			this.Table.Clear();
-			for (int i = 1; i <= hands.Length * cardsInHand; i += hands.Length)
-			{
-				for (int j = 0; j < hands.Length; j++)
-				{
-					hands[j].Cards.Add(this.DrawCard());
-				}
-			}
+			Table.Clear();
+			for (var i = 1; i <= hands.Length * cardsInHand; i += hands.Length)
+            {
+                foreach (var t in hands)
+                {
+                    t.Cards.Add(DrawCard());
+                }
+            }
 
-			Table.Add(this.DrawCard());
+			Table.Add(DrawCard());
 		}
 
-		private void BurnCard(Card drawCard)
-		{
-			// find a spot in middle of deck
-			// we should put card there
-			
-		}
-
-		/// <summary>
+        /// <summary>
 		/// Draws the card.
 		/// </summary>
 		/// <returns></returns>
 		public Card DrawCard()
 		{
-			Card result = null;
-			if (this.currentDrawCard < this.Cards.Size)
-			{
-				result = this.Cards.GetCard(this.currentDrawCard);
-				this.currentDrawCard++;
-			}
-			else
-			{
-				var size = this.Cards.Size;
+            if (_currentDrawCard >= Cards.Size) return null;
+            var result = Cards.GetCard(_currentDrawCard);
+            _currentDrawCard++;
 
-				// should we throw something here?
-			}
-			return result;
+            return result;
 		}
 	}
 }

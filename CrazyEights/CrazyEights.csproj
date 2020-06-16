@@ -6,7 +6,7 @@
     <ProductVersion>8.0.50727</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{367975F2-8172-4BDC-BA2C-D863760F7D58}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>CrazyEights</RootNamespace>
     <AssemblyName>CrazyEights</AssemblyName>

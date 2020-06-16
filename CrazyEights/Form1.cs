@@ -1,37 +1,35 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
 using System.Linq;
 using System.Threading;
-using GDIDB;
-using Fireworks;
+using System.Windows.Forms;
+using CrazyEights.Properties;
 using CrazyEightsCardLib;
+using Fireworks;
+using Timer = System.Threading.Timer;
 
 namespace CrazyEights
 {
-    public partial class frmMain : Form
+    public partial class FrmMain : Form
     {
         #region Private Delegates
         private delegate void ShowWildcardDelegate(CardSuit overrideSuit);
         private delegate void ShowHandWonDelegate(int winner);
         private delegate void ShowGameWonDelegate(int winner);
-        private delegate void ShowDrawTwoDelegate();
+        private delegate void EmptyDelegate();
         private delegate CardSuit GetSuitOverrideDelegate();
         #endregion
 
         #region Private Constants
-        private const int NumberOpponents = 3;
+
         private const int CardSpacing = 18;
-        private const int BoxWidth = 315;
-        private const int BoxHeight = 210;
-        private const int WAIT_LENGTH = 750;
-        private const int FRAME_WAIT_LENGTH = 100000;
-        private const int TICKS_PER_SECOND = 10000000;
-        private const int FIREWORKS_LAUNCH_TIME = TICKS_PER_SECOND * 2;
+        private const int WaitLength = 750;
+        private const int FrameWaitLength = 100000;
+
+        private const int TicksPerSecond = 10000000;
+
+        private const int FireworksLaunchTime = TicksPerSecond * 2;
         #endregion
 
         #region Enums
@@ -49,70 +47,58 @@ namespace CrazyEights
         //    OpponentTurn,
         //}
 
-        private enum GameType
-        {
-            CrazyEights,
-            GoFish,
-            War,
-            Rummy
-        }
-
         #endregion
 
         #region Private Instance Fields
-        private ManualResetEvent _fireworksEvent = new ManualResetEvent(false);
-        private ManualResetEvent _stopGameEvent = new ManualResetEvent(false);
-        private Thread _gameLoopThread = null;
-        private Thread _fireworksThread = null;
+        private readonly ManualResetEvent _fireworksEvent = new ManualResetEvent(false);
+        private readonly ManualResetEvent _stopGameEvent = new ManualResetEvent(false);
 
         private Hand.PlayDirection _direction;
         private GameData _data;
         private GameState _state;
         private string _prompt = string.Empty;
-        private bool _mouseUp = false;
-        private bool _deckSelected = false;
+        private bool _mouseUp;
+        private bool _deckSelected;
         private CardSuit _suitOverride = CardSuit.None;
         //private bool _wildCard = false;
-        private bool _playerWon = false;
-        private bool _playerHasDrawn = false;
+        private bool _playerWon;
+        private bool _playerHasDrawn;
 
-        private int _winningOpponnent = 0;
-        private int _currentPlayer = 0;
-        private int _startingPlayer = 0;
-        private bool _skipFlag = false;
+        private int _winningOpponent;
+        private int _currentPlayer;
+        private int _startingPlayer;
+        private bool _skipFlag;
 
-        private int _undoPointer = 0;
+        private int _undoPointer;
 
-        private CardCanvas _cardCanvas = new CardCanvas();
+        private readonly CardCanvas _cardCanvas = new CardCanvas();
 
         private int _numOpponents = 3;
 
-        private int _lastMouseX = 0;
-        private int _lastMouseY = 0;
+        private int _lastMouseX;
+        private int _lastMouseY;
         private MouseButtons _lastMouseButton = MouseButtons.None;
 
-        private Card _lastSelectedCard = null;
-        private List<Card> _lastCardsPlayed = new List<Card>();
-        private List<Card> _lastDrawnCards = new List<Card>();
-        private int[] _scores = new int[4] { 0, 0, 0, 0 };
-        private string[] _playerNames = new string[3] { "Patrick", "Betty", "Roberto" };
+        private Card _lastSelectedCard;
+        private readonly List<Card> _lastCardsPlayed = new List<Card>();
+        private readonly List<Card> _lastDrawnCards = new List<Card>();
+        private readonly int[] _scores = { 0, 0, 0, 0 };
+        private readonly string[] _playerNames = { "Patrick", "Betty", "Roberto" };
 
-        private int _dueceCount = 0;
-
-        private RocketQueue _rocketQueue = new RocketQueue(new Random(), new Size(0, 0));
-        private SparkQueue _sparkQueue = new SparkQueue();
+        private readonly RocketQueue _rocketQueue = new RocketQueue(new Random(), new Size(0, 0));
+        private readonly SparkQueue _sparkQueue = new SparkQueue();
         #endregion
 
         #region Constructors
-        public frmMain()
+        public FrmMain()
         {
             InitializeComponent();
 
-            this.FormClosed += new FormClosedEventHandler(Form1_FormClosed);
+            FormClosed += Form1_FormClosed;
 
             _data = new GameData(_numOpponents, 1);
 
-            this.SetStyle(
+            SetStyle(
               ControlStyles.AllPaintingInWmPaint |
               ControlStyles.UserPaint |
               ControlStyles.DoubleBuffer, true);
@@ -125,8 +111,8 @@ namespace CrazyEights
 
             _direction = Hand.PlayDirection.Forward;
 
-            _gameLoopThread = new System.Threading.Thread(GameLoop);
-            _gameLoopThread.Start();
+            var gameLoopThread = new Thread(GameLoop);
+            gameLoopThread.Start();
 
             _tableCenter = Size.Width / 2;
 
@@ -160,12 +146,7 @@ namespace CrazyEights
                         PaintTable(e.Graphics);
                         PaintPlayerNames(e.Graphics);
                         PaintSuitOverride(e.Graphics);
-                        if( _currentPlayer == 0 )
-                            PaintPrompt(e.Graphics, Brushes.White);
-                        else
-                        {
-                            PaintPrompt(e.Graphics, Brushes.Yellow);
-                        }
+                        PaintPrompt(e.Graphics, _currentPlayer == 0 ? Brushes.White : Brushes.Yellow);
                         PaintDeckSelection(e.Graphics);
                         PaintDirection(e.Graphics);
                         break;
@@ -181,30 +162,30 @@ namespace CrazyEights
         #endregion
 
         #region Drawing Code
-        private const int OPPONENT_ONE_TOP = 225;
-        private const int OPPONENT_TWO_TOP = 30;
-        private const int OPPONENT_THREE_TOP = 225;
-        private const int CARDS_PER_HAND = 5;
-        private const int SELECTED_OFFSET = 10;
-        private const int SCORE_WIDTH = 250;
-        private const int SCORE_HEIGHT = 54;
-        private const int PLAYER_ROW = 403;
-        private const int HAND_MAX_WIDTH = 180;
-        private const int DECK_ROW = 225;
+        private const int OpponentOneTop = 225;
+        private const int OpponentTwoTop = 30;
+        private const int OpponentThreeTop = 225;
+        private const int CardsPerHand = 5;
+        private const int SelectedOffset = 10;
+        private const int ScoreWidth = 250;
+        private const int ScoreHeight = 54;
+        private const int PlayerRow = 403;
+        private const int HandMaxWidth = 180;
+
         private int _borderWidth = 2;
         //private Point _tableTLC = new Point(339, 225);
         //private Point _deckTLC = new Point(258, 225);
-        private int _tableCenter = 334;
+        private int _tableCenter;
 
-        private Font _gameOverFont = new Font(FontFamily.GenericSansSerif, 36.0f, FontStyle.Bold, GraphicsUnit.Point);
-        private Font _overrideFont = new Font(FontFamily.GenericSansSerif, 10.0f, FontStyle.Bold, GraphicsUnit.Point);
-        private Font _promptFont = new Font(FontFamily.GenericSansSerif, 14.0f, FontStyle.Bold, GraphicsUnit.Point);
-        private Font _nameFont = new Font(FontFamily.GenericSansSerif, 10.0f, FontStyle.Bold, GraphicsUnit.Point);
-        private Font _directionFont = new Font(FontFamily.GenericSansSerif, 8.0f, FontStyle.Bold, GraphicsUnit.Point);
+        private readonly Font _gameOverFont = new Font(FontFamily.GenericSansSerif, 36.0f, FontStyle.Bold, GraphicsUnit.Point);
+        private readonly Font _overrideFont = new Font(FontFamily.GenericSansSerif, 10.0f, FontStyle.Bold, GraphicsUnit.Point);
+        private readonly Font _promptFont = new Font(FontFamily.GenericSansSerif, 14.0f, FontStyle.Bold, GraphicsUnit.Point);
+        private readonly Font _nameFont = new Font(FontFamily.GenericSansSerif, 10.0f, FontStyle.Bold, GraphicsUnit.Point);
+        private readonly Font _directionFont = new Font(FontFamily.GenericSansSerif, 8.0f, FontStyle.Bold, GraphicsUnit.Point);
         private Font _scoreFont = new Font(FontFamily.GenericSansSerif, 7.0f, FontStyle.Bold, GraphicsUnit.Point);
-        private Color _scoreBackgroundColor = Color.FromArgb(64, 255, 255, 255);
-        private Color _scoreBorderColor = Color.FromArgb(255, 0, 32, 0);
-        private Color _scoreForegroundColor = Color.FromArgb(255, 255, 255, 255);
+        private readonly Color _scoreBackgroundColor = Color.FromArgb(64, 255, 255, 255);
+        private readonly Color _scoreBorderColor = Color.FromArgb(255, 0, 32, 0);
+        private readonly Color _scoreForegroundColor = Color.FromArgb(255, 255, 255, 255);
 
 
         private void PaintTable(Graphics graphics)
@@ -224,94 +205,88 @@ namespace CrazyEights
         
         private void PaintGameOver(Graphics graphics)
         {
-            string text = "";
-            if (_playerWon)
-            {
-                text = "You Won!";
-            }
-            else
-            {
-                text = "Game Over";
-            }
+            var text = _playerWon ? "You Won!" : "Game Over";
 
-            SizeF textSize = graphics.MeasureString(text, _gameOverFont);
+            var textSize = graphics.MeasureString(text, _gameOverFont);
             graphics.DrawString(text, _gameOverFont, Brushes.Yellow, new PointF((Width - textSize.Width)/2, (Height - textSize.Height)/2));
 
             // only paint sparks if window is not minimized
-            if (WindowState != FormWindowState.Minimized)
-            {
-                _sparkQueue.CullDeadSparks(true, true);
-                _rocketQueue.makeSparks(_sparkQueue);
-                _sparkQueue.Paint(graphics);
-            }
+            if (WindowState == FormWindowState.Minimized) return;
+            _sparkQueue.CullDeadSparks(true, true);
+            _rocketQueue.makeSparks(_sparkQueue);
+            _sparkQueue.Paint(graphics);
         }
 
         private void ShowDrawTwoDialog()
         {
-            if (this.InvokeRequired)
+            if (InvokeRequired)
             {
-                this.Invoke(new ShowDrawTwoDelegate(ShowDrawTwoDialog));
+                Invoke(new EmptyDelegate(ShowDrawTwoDialog));
             }
             else
             {
-                MessageBox.Show(this, "Draw Two!", "Crazy Eights");
-
+                MessageBox.Show(this, @"Draw Two!", @"Crazy Eights");
             }
         }
 
-        private void ShowWildcardDialog(CardSuit overrideSuit)
+        private void ShowDrawFourDialog()
         {
-            if( this.InvokeRequired )
+            if (InvokeRequired)
             {
-                this.Invoke( new ShowWildcardDelegate(ShowWildcardDialog), overrideSuit);
+                Invoke(new EmptyDelegate(ShowDrawFourDialog));
             }
             else
             {
-                MessageBox.Show(this, string.Format(Properties.Resources.Caption_OverrideSuit, overrideSuit.ToString()), Properties.Resources.Caption_CrazyEights);
+                MessageBox.Show(this, @"Draw Four!", @"Crazy Eights");
+            }
+        }
+        private void ShowWildcardDialog(CardSuit overrideSuit)
+        {
+            if( InvokeRequired )
+            {
+                Invoke( new ShowWildcardDelegate(ShowWildcardDialog), overrideSuit);
+            }
+            else
+            {
+                MessageBox.Show(this, string.Format(Resources.Caption_OverrideSuit, overrideSuit.ToString()), Resources.Caption_CrazyEights);
             }
         }
 
         private void ShowGameWonDialog(int winner)
         {
-            if (this.InvokeRequired)
+            if (InvokeRequired)
             {
-                this.Invoke(new ShowGameWonDelegate(ShowGameWonDialog), winner);
+                Invoke(new ShowGameWonDelegate(ShowGameWonDialog), winner);
             }
             else
             {
-                if (winner == 0)
-                {
-                    MessageBox.Show(Properties.Resources.Text_YouWonGame, Properties.Resources.Caption_CrazyEights);
-                }
-                else
-                {
-                    MessageBox.Show(string.Format(Properties.Resources.Text_OpponentWonGame, _playerNames[winner - 1]), Properties.Resources.Caption_CrazyEights);
-                }
+                MessageBox.Show(
+                    winner == 0
+                        ? Resources.Text_YouWonGame
+                        : string.Format(Resources.Text_OpponentWonGame, _playerNames[winner - 1]),
+                    Resources.Caption_CrazyEights);
             }
         }
 
         private void ShowHandWonDialog(int winner)
         {
-            if (this.InvokeRequired)
+            if (InvokeRequired)
             {
-                this.Invoke(new ShowHandWonDelegate(ShowHandWonDialog), winner);
+                Invoke(new ShowHandWonDelegate(ShowHandWonDialog), winner);
             }
             else
             {
-                if (winner == 0)
-                {
-                    MessageBox.Show(Properties.Resources.Text_YouWonHand, Properties.Resources.Caption_CrazyEights);
-                }
-                else
-                {
-                    MessageBox.Show(string.Format(Properties.Resources.Text_OpponentWonHand, _playerNames[winner - 1]), Properties.Resources.Caption_CrazyEights);
-                }
+                MessageBox.Show(
+                    winner == 0
+                        ? Resources.Text_YouWonHand
+                        : string.Format(Resources.Text_OpponentWonHand, _playerNames[winner - 1]),
+                    Resources.Caption_CrazyEights);
             }
         }
 
         private void PaintScore(Graphics graphics)
         {
-            Rectangle scoreRect = new Rectangle(_tableCenter - (SCORE_WIDTH / 2), PLAYER_ROW + CardCanvas.DefaultHeight + (CardSpacing / 2), SCORE_WIDTH, SCORE_HEIGHT);
+            Rectangle scoreRect = new Rectangle(_tableCenter - (ScoreWidth / 2), PlayerRow + CardCanvas.DefaultHeight + (CardSpacing / 2), ScoreWidth, ScoreHeight);
             Rectangle clientRect = ShrinkRect(scoreRect, 1);
 
             PaintScoreBox(graphics, scoreRect, clientRect);
@@ -321,37 +296,37 @@ namespace CrazyEights
             else
                 _scoreFont = new Font(_scoreFont, FontStyle.Bold);
 
-            string text = Properties.Resources.Caption_Score;
+            string text = Resources.Caption_Score;
             SizeF textSize = graphics.MeasureString(text, _scoreFont);
-            graphics.DrawString(string.Format(Properties.Resources.Text_ScoreDisplay, "You", _scores[0]), _scoreFont, new SolidBrush(_scoreForegroundColor), new Point(clientRect.X, clientRect.Y + 8));
+            graphics.DrawString(string.Format(Resources.Text_ScoreDisplay, "You", _scores[0]), _scoreFont, new SolidBrush(_scoreForegroundColor), new Point(clientRect.X, clientRect.Y + 8));
 
-            if (_state == GameState.GameOver && (_winningOpponnent != 0 || _playerWon))
+            if (_state == GameState.GameOver && (_winningOpponent != 0 || _playerWon))
                 _scoreFont = new Font(_scoreFont, FontStyle.Strikeout);
             else
                 _scoreFont = new Font(_scoreFont, FontStyle.Bold);
 
-            graphics.DrawString(string.Format(Properties.Resources.Text_ScoreDisplay, _playerNames[0], _scores[1]), _scoreFont, new SolidBrush(_scoreForegroundColor), new Point(clientRect.X, clientRect.Y + clientRect.Height - 16));
+            graphics.DrawString(string.Format(Resources.Text_ScoreDisplay, _playerNames[0], _scores[1]), _scoreFont, new SolidBrush(_scoreForegroundColor), new Point(clientRect.X, clientRect.Y + clientRect.Height - 16));
 
-            if (_state == GameState.GameOver && (_winningOpponnent != 1 || _playerWon))
+            if (_state == GameState.GameOver && (_winningOpponent != 1 || _playerWon))
                 _scoreFont = new Font(_scoreFont, FontStyle.Strikeout);
             else
                 _scoreFont = new Font(_scoreFont, FontStyle.Bold);
 
-            string scoreText = string.Format(Properties.Resources.Text_ScoreDisplay, _playerNames[1], _scores[2]);
+            string scoreText = string.Format(Resources.Text_ScoreDisplay, _playerNames[1], _scores[2]);
             SizeF scoreTextSize = graphics.MeasureString(scoreText, _scoreFont);
             graphics.DrawString(scoreText, _scoreFont, new SolidBrush(_scoreForegroundColor), new PointF((clientRect.X + clientRect.Width) - scoreTextSize.Width - 1, clientRect.Y + 8));
 
-            if (_state == GameState.GameOver && (_winningOpponnent != 2 || _playerWon))
+            if (_state == GameState.GameOver && (_winningOpponent != 2 || _playerWon))
                 _scoreFont = new Font(_scoreFont, FontStyle.Strikeout);
             else
                 _scoreFont = new Font(_scoreFont, FontStyle.Bold);
 
-            scoreText = string.Format(Properties.Resources.Text_ScoreDisplay, _playerNames[2], _scores[3]);
+            scoreText = string.Format(Resources.Text_ScoreDisplay, _playerNames[2], _scores[3]);
             scoreTextSize = graphics.MeasureString(scoreText, _scoreFont);
             graphics.DrawString(scoreText, _scoreFont, new SolidBrush(_scoreForegroundColor), new PointF((clientRect.X + clientRect.Width) - scoreTextSize.Width - 1, ((clientRect.Y + clientRect.Height) - 16)));
 
             _scoreFont = new Font(_scoreFont, FontStyle.Bold);
-            graphics.DrawString(Properties.Resources.Caption_Score, _scoreFont, new SolidBrush(_scoreForegroundColor),
+            graphics.DrawString(Resources.Caption_Score, _scoreFont, new SolidBrush(_scoreForegroundColor),
                 new PointF(clientRect.X + ((clientRect.Width - textSize.Width) / 2),
                     clientRect.Y));
         }
@@ -367,162 +342,152 @@ namespace CrazyEights
         {
             if( _suitOverride != CardSuit.None )
             {
-                Image suitImage = GetSuitImage(_suitOverride);
+                var suitImage = GetSuitImage(_suitOverride);
 
-                string text = string.Format(Properties.Resources.Caption_OverrideSuit, "");
-                SizeF textSize = graphics.MeasureString(text, _overrideFont);
+                var text = string.Format(Resources.Caption_OverrideSuit, "");
+                var textSize = graphics.MeasureString(text, _overrideFont);
 
-                Point deckTLC = new Point(258, 225);
-                deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+                var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-                Image directionImage = (_direction == Hand.PlayDirection.Forward ? Properties.Resources.PNG_Forward : Properties.Resources.PNG_Reverse);
-                float deck_row = (float)(deckTLC.Y + CardCanvas.DefaultHeight + _borderWidth + (directionImage.Height * 1.5));
+                Image directionImage = (_direction == Hand.PlayDirection.Forward ? Resources.PNG_Forward : Resources.PNG_Reverse);
+                var deckRow = (float)(deckTlc.Y + CardCanvas.DefaultHeight + _borderWidth + (directionImage.Height * 1.5));
 
-                float size = textSize.Width + suitImage.Width;
-                float leftEdge = _tableCenter - (size / 2);
-                graphics.DrawString(text, _overrideFont, Brushes.White, new PointF(leftEdge, deck_row));
+                var size = textSize.Width + suitImage.Width;
+                var leftEdge = _tableCenter - (size / 2);
+                graphics.DrawString(text, _overrideFont, Brushes.White, new PointF(leftEdge, deckRow));
 
               //textPoint.X += textSize.Width;
 
-                float centerPoint = deck_row + (_overrideFont.Height/2) - (suitImage.Height/2);
-                graphics.DrawImage(suitImage, new PointF(leftEdge + textSize.Width, centerPoint));
+              if (_overrideFont == null) return;
+              var centerPoint = deckRow + (_overrideFont.Height/2.0f) - (suitImage.Height/2.0f);
+              graphics.DrawImage(suitImage, new PointF(leftEdge + textSize.Width, centerPoint));
             }
         }
 
         private void PaintDirection(Graphics graphics)
         {
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            int y = deckTLC.Y + CardCanvas.DefaultHeight + _borderWidth;
-            Image directionImage = (_direction == Hand.PlayDirection.Forward ? Properties.Resources.PNG_Forward : Properties.Resources.PNG_Reverse);
+            var y = deckTlc.Y + CardCanvas.DefaultHeight + _borderWidth;
+            var directionImage = (_direction == Hand.PlayDirection.Forward ? Resources.PNG_Forward : Resources.PNG_Reverse);
 
-            SizeF textSize = graphics.MeasureString("Direction", _directionFont);
+            var textSize = graphics.MeasureString("Direction", _directionFont);
 
-            PointF renderPoint = new PointF(_tableCenter - (directionImage.Width + textSize.Width + 5)/ 2, y);
+            var renderPoint = new PointF(_tableCenter - (directionImage.Width + textSize.Width + 5)/ 2, y);
             graphics.DrawString("Direction", _directionFont, Brushes.GhostWhite, new PointF(renderPoint.X, y + ((directionImage.Height - textSize.Height) / 2)));
             graphics.DrawImage(directionImage, new PointF(renderPoint.X + textSize.Width + 5, renderPoint.Y));
 
         }
 
-        private Image GetSuitImage(CardSuit suit)
+        private static Image GetSuitImage(CardSuit suit)
         {
-            Image suitImage = null;
+            Image suitImage;
             switch (suit)
             {
                 case CardSuit.Diamonds:
-                    suitImage = Properties.Resources.PNG_DiamondsSuit;
+                    suitImage = Resources.PNG_DiamondsSuit;
                     break;
 
                 case CardSuit.Hearts:
-                    suitImage = Properties.Resources.PNG_HeartsSuit;
+                    suitImage = Resources.PNG_HeartsSuit;
                     break;
 
                 case CardSuit.Spades:
-                    suitImage = Properties.Resources.PNG_SpadesSuit;
+                    suitImage = Resources.PNG_SpadesSuit;
                     break;
 
-                default:
-                    suitImage = Properties.Resources.PNG_ClubsSuit;
+                case CardSuit.Clubs:
+                    suitImage = Resources.PNG_ClubsSuit;
                     break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(suit), suit, null);
             }
+
             return suitImage;
         }
 
         private void PaintPrompt(Graphics g, Brush brush)
         {
 
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            if (!string.IsNullOrEmpty(_prompt))
-            {
-                SizeF textSize = g.MeasureString(_prompt, _promptFont);
-                g.DrawString(_prompt, _promptFont, brush, new PointF(_tableCenter - textSize.Width/2, deckTLC.Y - 50));
-            }
+            if (string.IsNullOrEmpty(_prompt)) return;
+            var textSize = g.MeasureString(_prompt, _promptFont);
+            g.DrawString(_prompt, _promptFont, brush, new PointF(_tableCenter - textSize.Width/2, deckTlc.Y - 50));
         }
 
         private void PaintDeck()
         {
             //_deckTLC.Y = (Size.Height - CardCanvas.DefaultHeight) / 2;
-            Point deckTLC = new Point(258, 225);
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing/2;
-            if (!_data.DeckManager.IsEmpty)
-                _cardCanvas.DrawCardBack(deckTLC, GetSelectedBack());
-            else
-                _cardCanvas.DrawCardBack(deckTLC, CardBack.The_X);
+            _cardCanvas.DrawCardBack(deckTlc, !_data.DeckManager.IsEmpty ? GetSelectedBack() : CardBack.The_X);
         }
 
 
         private void PaintDeckSelection(Graphics graphics)
         {
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
-            if (_deckSelected)
-            {
-                graphics.DrawRectangle(Pens.Gold, ShrinkRect(new Rectangle(deckTLC, new Size(CardCanvas.DefaultWidth, CardCanvas.DefaultHeight)), -1));
-                graphics.DrawRectangle(Pens.Gold, ShrinkRect(new Rectangle(deckTLC, new Size(CardCanvas.DefaultWidth, CardCanvas.DefaultHeight)), -2));
-            }
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
+            if (!_deckSelected) return;
+
+            graphics.DrawRectangle(Pens.Gold, ShrinkRect(new Rectangle(deckTlc, new Size(CardCanvas.DefaultWidth, CardCanvas.DefaultHeight)), -1));
+            graphics.DrawRectangle(Pens.Gold, ShrinkRect(new Rectangle(deckTlc, new Size(CardCanvas.DefaultWidth, CardCanvas.DefaultHeight)), -2));
         }
 
 
         private void PaintTable()
         {
-            Point tableTLC = new Point(339, 225);
-            tableTLC.X = _tableCenter + CardSpacing/2;
+            var tableTlc = new Point(339, 225) {X = _tableCenter + CardSpacing / 2};
             if (_data.DeckManager.Table.Count > 0)
             {
-                Card topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
-                _cardCanvas.DrawCard(tableTLC, topCard.CardIndex);
+                var topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
+                _cardCanvas.DrawCard(tableTlc, topCard.CardIndex);
             }
             else
             {
-                _cardCanvas.DrawCardBack(tableTLC, CardBack.The_O);
+                _cardCanvas.DrawCardBack(tableTlc, CardBack.The_O);
             }
         }
 
         private void PaintOpponentHands()
         {
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            Point tableTLC = new Point(339, 225);
-            tableTLC.X = _tableCenter + CardSpacing / 2;
+            var tableTlc = new Point(339, 225) {X = _tableCenter + CardSpacing / 2};
 
-            Point opponent1TLC = new Point(20, OPPONENT_ONE_TOP);
-            Point opponent2TLC = new Point();
-            Point opponent3TLC = new Point();
+            var opponent1Tlc = new Point(20, OpponentOneTop);
+            var opponent2Tlc = new Point();
+            var opponent3Tlc = new Point();
 
-            opponent2TLC.Y = OPPONENT_TWO_TOP;
-            opponent3TLC.Y = OPPONENT_THREE_TOP;
+            opponent2Tlc.Y = OpponentTwoTop;
+            opponent3Tlc.Y = OpponentThreeTop;
 
-            int center = _tableCenter; // _tableTLC.X + (CardCanvas.DefaultWidth / 2);
-            opponent2TLC.X = center - ((((_data.OpponentsHands[1].Cards.Count - 1) * CardSpacing) + CardCanvas.DefaultWidth) / 2);
+            var center = _tableCenter; // _tableTLC.X + (CardCanvas.DefaultWidth / 2);
+            opponent2Tlc.X = center - ((((_data.OpponentsHands[1].Cards.Count - 1) * CardSpacing) + CardCanvas.DefaultWidth) / 2);
 
-            opponent1TLC.X = deckTLC.X - (CardSpacing * 5) - HAND_MAX_WIDTH;
+            opponent1Tlc.X = deckTlc.X - (CardSpacing * 5) - HandMaxWidth;
 
-            if (opponent1TLC.X < 20)
+            if (opponent1Tlc.X < 20)
             {
-                opponent1TLC.X = 20;
+                opponent1Tlc.X = 20;
             }
-            int minX = tableTLC.X + CardCanvas.DefaultWidth + CardSpacing;
-            opponent3TLC.X = tableTLC.X + CardCanvas.DefaultHeight + (CardSpacing * 5); // -(((_data.OpponentsHands[2].Cards.Count - 1) * CardSpacing) + CardCanvas.DefaultWidth);
-            if (opponent3TLC.X < minX)
+            int minX = tableTlc.X + CardCanvas.DefaultWidth + CardSpacing;
+            opponent3Tlc.X = tableTlc.X + CardCanvas.DefaultHeight + (CardSpacing * 5); // -(((_data.OpponentsHands[2].Cards.Count - 1) * CardSpacing) + CardCanvas.DefaultWidth);
+            if (opponent3Tlc.X < minX)
             {
-                opponent3TLC.X = minX;
+                opponent3Tlc.X = minX;
             }
         
             // array of locations for opponent hands
-            Point[] opponentTLC = new Point[3] {opponent1TLC, opponent2TLC, opponent3TLC};
-            int[] maxWidths = new int[3] { HAND_MAX_WIDTH, Width, HAND_MAX_WIDTH };
+            var opponentTlc = new[] {opponent1Tlc, opponent2Tlc, opponent3Tlc};
+            var maxWidths = new[] { HandMaxWidth, Width, HandMaxWidth };
 
             // draw each opponent hands
-            for( int i=0; i<3; i++)
+            for( var i=0; i<3; i++)
             {
                 if (_data.OpponentsHands[i].Cards.Count > 0)
                 {
-                    PaintHand(_data.OpponentsHands[i].Cards.ToArray(), opponentTLC[i], true, maxWidths[i]);
+                    PaintHand(_data.OpponentsHands[i].Cards.ToArray(), opponentTlc[i], false, maxWidths[i]);
                 }
             }
 
@@ -530,51 +495,39 @@ namespace CrazyEights
 
         private void PaintPlayerNames(Graphics graphics)
         {
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            Point tableTLC = new Point(339, 225);
-            tableTLC.X = _tableCenter + CardSpacing / 2;
+            var tableTlc = new Point(339, 225) {X = _tableCenter + CardSpacing / 2};
 
-            string playerNameText = _playerNames[0];
-            SizeF playerNameSize = graphics.MeasureString(playerNameText, _nameFont);
+            var playerNameText = _playerNames[0];
+            var playerNameSize = graphics.MeasureString(playerNameText, _nameFont);
 
-            float leftEdge = deckTLC.X - (CardSpacing * 5) - HAND_MAX_WIDTH;
-            leftEdge = leftEdge + ((HAND_MAX_WIDTH - playerNameSize.Width) / 2);
+            float leftEdge = deckTlc.X - (CardSpacing * 5) - HandMaxWidth;
+            leftEdge += ((HandMaxWidth - playerNameSize.Width) / 2);
 
-            Brush brush;
-            if (_currentPlayer == 1)
-                brush = Brushes.Yellow;
-            else
-                brush = Brushes.White;
+            var brush = _currentPlayer == 1 ? Brushes.Yellow : Brushes.White;
 
-            graphics.DrawString(playerNameText, _nameFont, brush, new PointF(leftEdge, (OPPONENT_ONE_TOP - playerNameSize.Height)));
+            graphics.DrawString(playerNameText, _nameFont, brush, new PointF(leftEdge, (OpponentOneTop - playerNameSize.Height)));
 
             playerNameText = _playerNames[1];
             playerNameSize = graphics.MeasureString(playerNameText, _nameFont);
 
-            int center = _tableCenter; // tableTLC.X + (CardCanvas.DefaultWidth / 2);
+            var center = _tableCenter; // tableTLC.X + (CardCanvas.DefaultWidth / 2);
             leftEdge = center - (playerNameSize.Width / 2);
 
-            if (_currentPlayer == 2)
-                brush = Brushes.Yellow;
-            else
-                brush = Brushes.White;
+            brush = _currentPlayer == 2 ? Brushes.Yellow : Brushes.White;
 
-            graphics.DrawString(playerNameText, _nameFont, brush, new PointF(leftEdge, (OPPONENT_TWO_TOP + CardCanvas.DefaultHeight)));
+            graphics.DrawString(playerNameText, _nameFont, brush, new PointF(leftEdge, (OpponentTwoTop + CardCanvas.DefaultHeight)));
 
             playerNameText = _playerNames[2];
             playerNameSize = graphics.MeasureString(playerNameText, _nameFont);
 
-            leftEdge = tableTLC.X + CardCanvas.DefaultHeight + (CardSpacing * 5);
-            leftEdge = leftEdge + ((HAND_MAX_WIDTH - playerNameSize.Width) / 2);
+            leftEdge = tableTlc.X + CardCanvas.DefaultHeight + (CardSpacing * 5);
+            leftEdge += ((HandMaxWidth - playerNameSize.Width) / 2);
 
-            if (_currentPlayer == 3)
-                brush = Brushes.Yellow;
-            else
-                brush = Brushes.White;
+            brush = _currentPlayer == 3 ? Brushes.Yellow : Brushes.White;
 
-            graphics.DrawString(playerNameText, _nameFont, brush, new PointF(leftEdge, (OPPONENT_THREE_TOP - playerNameSize.Height)));
+            graphics.DrawString(playerNameText, _nameFont, brush, new PointF(leftEdge, (OpponentThreeTop - playerNameSize.Height)));
         }
 
 
@@ -585,33 +538,33 @@ namespace CrazyEights
             int center = _tableCenter; // _tableTLC.X + (CardCanvas.DefaultWidth / 2);
 
             playerCardPoint.X = center - ((((_data.PlayerHand.Cards.Count - 1) * CardSpacing) + CardCanvas.DefaultWidth) / 2);
-            playerCardPoint.Y = PLAYER_ROW;
+            playerCardPoint.Y = PlayerRow;
             if (_data.PlayerHand.Cards.Count > 0)
             {
                 PaintHand(_data.PlayerHand.Cards.ToArray(), playerCardPoint, true, -1);
             }
         }
 
-        private void PaintHand(Card[] hand, Point TLC, bool showCard, int maxWidth)
+        private void PaintHand(Card[] hand, Point tlc, bool showCard, int maxWidth)
         {
-            int currentX = TLC.X;
-            int currentY = TLC.Y;
-            for (int i = 0; i < hand.Length; i++)
+            int currentX = tlc.X;
+            int currentY = tlc.Y;
+            foreach (var t in hand)
             {
-                if (maxWidth >= 0 && Math.Abs((currentX + CardCanvas.DefaultWidth)- TLC.X) > maxWidth)
+                if (maxWidth >= 0 && Math.Abs((currentX + CardCanvas.DefaultWidth)- tlc.X) > maxWidth)
                 {
                     currentY += CardSpacing;
-                    currentX = TLC.X;
+                    currentX = tlc.X;
                 }
 
-                Point cardPoint = new Point(currentX, currentY);
+                var cardPoint = new Point(currentX, currentY);
                 if (showCard)
                 {
-                    if (hand[i].Selected)
+                    if (t.Selected)
                     {
-                        cardPoint.Y -= SELECTED_OFFSET;
+                        cardPoint.Y -= SelectedOffset;
                     }
-                    _cardCanvas.DrawCard(cardPoint, hand[i].CardIndex);
+                    _cardCanvas.DrawCard(cardPoint, t.CardIndex);
                 }
                 else
                 {
@@ -626,15 +579,16 @@ namespace CrazyEights
         #region Message Handlers
         private void newGameToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            AskStartGame();
+            StartFireworksThread();
+            //AskStartGame();
         }
 
-        private bool AskStartGame()
+        private void AskStartGame()
         {
             bool startGame = true;
             if (_state == GameState.Playing)
             {
-                if (MessageBox.Show(Properties.Resources.Prompt_AbandonGame, Properties.Resources.Caption_GameInProgress, MessageBoxButtons.YesNo) != DialogResult.Yes)
+                if (MessageBox.Show(Resources.Prompt_AbandonGame, Resources.Caption_GameInProgress, MessageBoxButtons.YesNo) != DialogResult.Yes)
                 {
                     startGame = false;
                 }
@@ -644,8 +598,6 @@ namespace CrazyEights
             {
                 _state = GameState.StartGame;
             }
-
-            return startGame;
         }
 
         private void Form1_MouseUp(object sender, MouseEventArgs e)
@@ -668,7 +620,7 @@ namespace CrazyEights
         {
             if (e.CloseReason != CloseReason.WindowsShutDown)
             {
-                if (MessageBox.Show(this, Properties.Resources.Prompt_EndGame, Properties.Resources.Caption_CrazyEights, MessageBoxButtons.YesNoCancel, MessageBoxIcon.None) != DialogResult.Yes)
+                if (MessageBox.Show(this, Resources.Prompt_EndGame, Resources.Caption_CrazyEights, MessageBoxButtons.YesNoCancel, MessageBoxIcon.None) != DialogResult.Yes)
                 {
                     e.Cancel = true;
                 }
@@ -677,7 +629,7 @@ namespace CrazyEights
 
         private void quitToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            this.Close();
+            Close();
         }
 
         private void frmMain_MouseMove(object sender, MouseEventArgs e)
@@ -688,7 +640,7 @@ namespace CrazyEights
 
         private void cardBackToolStripMenuItem_DropDownItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
-            // find any other checked itme
+            // find any other checked item
             foreach (ToolStripMenuItem item in cardBackToolStripMenuItem.DropDownItems)
             {
                 if (item.Tag != e.ClickedItem.Tag && item.Checked)
@@ -701,27 +653,27 @@ namespace CrazyEights
         #endregion
 
         #region Game State
-        private void InitalizeHand()
+        private void InitializeHand()
         {
-            bool done = false;
+            var done = false;
 
             while (!done)
             {
                 _data.PlayerHand.Cards.Clear();
                 _data.DeckManager.Shuffle();
 
-                for (int i = 0; i < _data.OpponentsHands.Length; i++)
+                foreach (var t in _data.OpponentsHands)
                 {
-                    _data.OpponentsHands[i].Cards.Clear();
+                    t.Cards.Clear();
                 }
 
-                Hand[] hands = new Hand[_data.OpponentsHands.Length + 1];
+                var hands = new Hand[_data.OpponentsHands.Length + 1];
                 _data.OpponentsHands.CopyTo(hands, 0);
                 hands[_data.OpponentsHands.Length] = _data.PlayerHand;
 
-                _data.DeckManager.Deal(hands, CARDS_PER_HAND);
+                _data.DeckManager.Deal(hands, CardsPerHand);
 
-                if (_data.DeckManager.Table[0] != null && _data.DeckManager.Table[0].Rank != CardRank.Eight)
+                if (_data.DeckManager.Table[0] != null && _data.DeckManager.Table[0].Rank != SpecialCard.WildCard)
                 {
                     done = true;
                 }
@@ -763,8 +715,9 @@ namespace CrazyEights
         private void StartFireworksThread()
         {
             _fireworksEvent.Reset();
-            _fireworksThread = new Thread(new ThreadStart(FireworksThread));
-           // _fireworksThread.Start();
+            var thread = new Thread(FireworksThread);
+            thread.Start();
+            // _fireworksThread.Start();
         }
 
         private void StopFireworksThread()
@@ -784,7 +737,7 @@ namespace CrazyEights
             {
                 Invalidate();
 
-                if ((DateTime.Now.Ticks - timerTick) > FIREWORKS_LAUNCH_TIME)
+                if ((DateTime.Now.Ticks - timerTick) > FireworksLaunchTime)
                 {
                     if (!done)
                     {
@@ -809,11 +762,10 @@ namespace CrazyEights
 
         private void GameLoop()
         {
-            bool gameComplete = false;
             long lastFrameTime = 0;
             do
             {
-                if ((DateTime.Now.Ticks - lastFrameTime) > FRAME_WAIT_LENGTH)
+                if ((DateTime.Now.Ticks - lastFrameTime) > FrameWaitLength)
                 {
                     // only update state if not minimized
                     if (WindowState != FormWindowState.Minimized)
@@ -848,7 +800,7 @@ namespace CrazyEights
 
                             case GameState.StartGame:
                                 InitializeGame();
-                                InitalizeHand();
+                                InitializeHand();
                                 _state = GameState.Playing;
                                 break;
                         }
@@ -859,7 +811,7 @@ namespace CrazyEights
 
                 Thread.Sleep(0);
 
-            } while (!_stopGameEvent.WaitOne(10, true) && !gameComplete);
+            } while (!_stopGameEvent.WaitOne(10, true));
         }
 
         private void OpponentTurn()
@@ -873,17 +825,16 @@ namespace CrazyEights
             Invalidate();
 
             // wait - simulate thinking
-            Thread.Sleep(WAIT_LENGTH);
+            Thread.Sleep(WaitLength);
 
             // send table to ai, with current hand
             // to evaluate next move, which will be added
             // to the table by the ai
-            AIManager.MoveInfo info = AIManager.EvaluateMove(_data.DeckManager, _data.OpponentsHands[_currentPlayer - 1], _suitOverride);
+            AiManager.MoveInfo info = AiManager.EvaluateMove(_data.DeckManager, _data.OpponentsHands[_currentPlayer - 1], _suitOverride);
 
             if (info.DrawCard)
             {
-                Card card;
-                if (DrawCard(_currentPlayer, out card))
+                if (DrawCard(_currentPlayer, out _))
                 {
                     _currentPlayer = NextPlayer();
                 }
@@ -917,20 +868,12 @@ namespace CrazyEights
 
         private void SetPrompt()
         {
-            if (_currentPlayer == 0)
-            {
-                _prompt = Properties.Resources.Caption_YourTurn;
-            }
-            else
-            {
-                _prompt = string.Format(Properties.Resources.Text_OpponentTurn, _playerNames[_currentPlayer - 1]);
-            }
-
+            _prompt = _currentPlayer == 0 ? Resources.Caption_YourTurn : string.Format(Resources.Text_OpponentTurn, _playerNames[_currentPlayer - 1]);
         }
 
         private int NextPlayer()
         {
-            int player = _currentPlayer;
+            var player = _currentPlayer;
             if (_direction == Hand.PlayDirection.Forward)
             {
                 player++;
@@ -951,29 +894,27 @@ namespace CrazyEights
                 player = 0;
             }
 
-            if (_skipFlag)
+            if (!_skipFlag) return player;
+            _skipFlag = false;
+
+            if (_direction == Hand.PlayDirection.Forward)
             {
-                _skipFlag = false;
+                player++;
+            }
+            else
+            {
+                player--;
+            }
 
-                if (_direction == Hand.PlayDirection.Forward)
-                {
-                    player++;
-                }
-                else
-                {
-                    player--;
-                }
-
-                if (player < 0)
-                {
-                    // warp around to last opponent
-                    player = _data.OpponentsHands.Length;
-                }
-                else if (player > _data.OpponentsHands.Length)
-                {
-                    // wrap around to player
-                    player = 0;
-                }
+            if (player < 0)
+            {
+                // warp around to last opponent
+                player = _data.OpponentsHands.Length;
+            }
+            else if (player > _data.OpponentsHands.Length)
+            {
+                // wrap around to player
+                player = 0;
             }
 
             return player;
@@ -983,14 +924,13 @@ namespace CrazyEights
         {
             //SetPrompt();
 
-            int selectedColumn;
-            if (CardHitCheck(out selectedColumn))
+            if (CardHitCheck(out var selectedColumn))
             {
                 // bingo, play card
                 if (CheckValidCard(_data.PlayerHand.Cards[selectedColumn]))
                 {
                     _suitOverride = CardSuit.None;
-                    if (_data.PlayerHand.Cards[selectedColumn].Rank == CardRank.Eight)
+                    if (_data.PlayerHand.Cards[selectedColumn].Rank == SpecialCard.WildCard)
                     {
                         // display dialog for suit override
                         _suitOverride = GetSuitOverride();
@@ -1011,16 +951,15 @@ namespace CrazyEights
                 }
                 else
                 {
-                    _prompt = Properties.Resources.Text_InvalidCard;
+                    _prompt = Resources.Text_InvalidCard;
 
-                    var t = new System.Threading.Timer(new TimerCallback(Timer_Callback));
+                    var t = new Timer(Timer_Callback);
                     t.Change(2000, Timeout.Infinite);
                 }
             }
             else if (DeckHitCheck())
             {
-                Card card;
-                if (DrawCard(0, out card))
+                if (DrawCard(0, out _))
                 {
                     // player has to pass
                     _currentPlayer = NextPlayer();
@@ -1069,20 +1008,16 @@ namespace CrazyEights
 
         private bool DeckHitCheck()
         {
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            Point tableTLC = new Point(339, 225);
-            tableTLC.X = _tableCenter + CardSpacing / 2;
+            //var point = new Point(339, 225) {X = _tableCenter + CardSpacing / 2};
 
-            bool hitCheck = false;
-            if (_mouseUp && _lastMouseButton == MouseButtons.Left && _state == GameState.Playing)
+            var hitCheck = false;
+            if (!_mouseUp || _lastMouseButton != MouseButtons.Left || _state != GameState.Playing) return false;
+            // check for deck hit
+            if (_lastMouseX >= deckTlc.X && _lastMouseX <= deckTlc.X + CardCanvas.DefaultWidth && _lastMouseY >= deckTlc.Y && _lastMouseY <= deckTlc.Y + CardCanvas.DefaultHeight)
             {
-                // check for deck hit
-                if (_lastMouseX >= deckTLC.X && _lastMouseX <= deckTLC.X + CardCanvas.DefaultWidth && _lastMouseY >= deckTLC.Y && _lastMouseY <= deckTLC.Y + CardCanvas.DefaultHeight)
-                {
-                    hitCheck = true;
-                }
+                hitCheck = true;
             }
 
             return hitCheck;
@@ -1111,14 +1046,12 @@ namespace CrazyEights
 
         private void CheckMouseOver()
         {
-            Point deckTLC = new Point(258, 225);
-            deckTLC.X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2;
+            var deckTlc = new Point(258, 225) {X = _tableCenter - CardCanvas.DefaultWidth - CardSpacing / 2};
 
-            Point tableTLC = new Point(339, 225);
-            tableTLC.X = _tableCenter + CardSpacing / 2;
+            //var point = new Point(339, 225) {X = _tableCenter + CardSpacing / 2};
 
-            Card[] hand = _data.PlayerHand.Cards.ToArray();
-            int column = GetCardColumn(hand, _lastMouseX, _lastMouseY);
+            var hand = _data.PlayerHand.Cards.ToArray();
+            var column = GetCardColumn(hand, _lastMouseX, _lastMouseY);
 
             if (column >= 0 && column < hand.Length)
             {
@@ -1142,7 +1075,7 @@ namespace CrazyEights
             }
 
             // check for deck hit
-            if (_lastMouseX >= deckTLC.X && _lastMouseX <= deckTLC.X + CardCanvas.DefaultWidth && _lastMouseY >= deckTLC.Y && _lastMouseY <= deckTLC.Y + CardCanvas.DefaultHeight)
+            if (_lastMouseX >= deckTlc.X && _lastMouseX <= deckTlc.X + CardCanvas.DefaultWidth && _lastMouseY >= deckTlc.Y && _lastMouseY <= deckTlc.Y + CardCanvas.DefaultHeight)
             {
                 // if so, make deck selected
                 _deckSelected = true;
@@ -1157,24 +1090,26 @@ namespace CrazyEights
 
         private bool CheckValidCard(Card cardToPlay)
         {
-            bool validPlay = false;
+            var validPlay = false;
 
-            Card topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
+            var topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
 
             // if there is only one top card, then we match normal
             if (_data.DeckManager.Table.Count == 1)
             {
                 // if an eight, make sure we don't have any other suits
-                if (cardToPlay.Rank == CardRank.Eight)
+                if (cardToPlay.Rank == SpecialCard.WildCard)
                 {
-                    var suitCount = _data.PlayerHand.Cards.Count(c => c.Suit == topCard.Suit && c.Rank != CardRank.Eight);
+                    //var suitCount = _data.PlayerHand.Cards.Count(c => c.Suit == topCard.Suit && c.Rank != SpecialCard.WildCard);
 
                     // if there are no other suits but the eight, then we have a valid play
                     // otherwise, we should play one of the other suits
-                    if (suitCount == 0)
-                    {
-                        validPlay = true;
-                    }
+                    //if (suitCount == 0)
+                    //{
+                    //    validPlay = true;
+                    //}
+
+                    validPlay = true;
                 }
                 else
                 {
@@ -1186,32 +1121,34 @@ namespace CrazyEights
                 }
             }
             // if top card is an eight, rules are different, can only match rank or _suitOverride suit
-            else if (topCard.Rank == CardRank.Eight)
+            else if (topCard.Rank == SpecialCard.WildCard)
             {
-                if (cardToPlay.Rank == CardRank.Eight || cardToPlay.Suit == _suitOverride)
+                if (cardToPlay.Rank == SpecialCard.WildCard || cardToPlay.Suit == _suitOverride)
                 {
                     validPlay = true;
                 }
             }
-            else if (topCard.Rank == CardRank.Two && !_playerHasDrawn)
+            else if (topCard.Rank == SpecialCard.DrawTwo && !_playerHasDrawn)
             {
-                if (cardToPlay.Rank == CardRank.Two)
+                if (cardToPlay.Rank == SpecialCard.DrawTwo)
                 {
                     validPlay = true;
                 }
             }
             else
             {
-                if (cardToPlay.Rank == CardRank.Eight)
+                if (cardToPlay.Rank == SpecialCard.WildCard)
                 {
-                    var suitCount = _data.PlayerHand.Cards.Count(c => c.Suit == topCard.Suit && c.Rank != CardRank.Eight);
+                    //var suitCount = _data.PlayerHand.Cards.Count(c => c.Suit == topCard.Suit && c.Rank != SpecialCard.WildCard);
 
                     // if there are no other suits but the eight, then we have a valid play
                     // otherwise, we should play one of the other suits
-                    if (suitCount == 0)
-                    {
-                        validPlay = true;
-                    }
+                    //if (suitCount == 0)
+                    //{
+                    //    validPlay = true;
+                    //}
+
+                    validPlay = true;
                 }
                 else
                 {
@@ -1238,16 +1175,15 @@ namespace CrazyEights
         private CardSuit GetSuitOverride()
         {
             CardSuit selectedSuit = CardSuit.Clubs;
-            if (this.InvokeRequired)
+            if (InvokeRequired)
             {
-                selectedSuit = (CardSuit)this.Invoke(new GetSuitOverrideDelegate(GetSuitOverride));
+                selectedSuit = (CardSuit)Invoke(new GetSuitOverrideDelegate(GetSuitOverride));
             }
             else
             {
-                SuitOverrideDialog dlg = new SuitOverrideDialog();
+                var dlg = new SuitOverrideDialog {StartPosition = FormStartPosition.CenterParent};
 
-                dlg.StartPosition = FormStartPosition.CenterParent;
-                if (dlg.ShowDialog(this) == System.Windows.Forms.DialogResult.OK)
+                if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
                     selectedSuit = dlg.Suit;
                 }
@@ -1296,59 +1232,6 @@ namespace CrazyEights
             return pass;
         }
 
-        private void ReShuffle()
-        {
-            // make exlusion list
-            int exlusionLength = _data.PlayerHand.Cards.Count;
-
-            for (int i = 0; i < _numOpponents; i++)
-            {
-                exlusionLength += _data.OpponentsHands[i].Cards.Count;
-            }
-
-            Card topCard = null;
-            if (_data.DeckManager.Table.Count > 0)
-            {
-                topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
-                exlusionLength += 1;
-            }
-
-            if (exlusionLength > 0)
-            {
-
-                Card[] exlusionList = new Card[exlusionLength];
-                int copyIndex = 0;
-
-                Array.Copy(_data.PlayerHand.Cards.ToArray(), exlusionList, _data.PlayerHand.Cards.Count);
-
-                copyIndex += _data.PlayerHand.Cards.Count;
-                for (int i = 0; i < _numOpponents; i++)
-                {
-                    Array.Copy(_data.OpponentsHands[i].Cards.ToArray(), 0, exlusionList, copyIndex, _data.OpponentsHands[i].Cards.Count);
-                    copyIndex += _data.OpponentsHands[i].Cards.Count;
-                }
-
-                if (topCard != null)
-                {
-                    Card[] topCardArray = new Card[1] { topCard };
-
-                    Array.Copy(topCardArray, 0, exlusionList, copyIndex, 1);
-                }
-
-                _data.DeckManager.Shuffle(exlusionList);
-
-            }
-            else
-            {
-                _data.DeckManager.Shuffle();
-            }
-
-            if (topCard != null)
-            {
-                _data.DeckManager.Table.Add(topCard);
-            }
-        }
-
         private void PlayCard(Card cardToPlay, CrazyEightsHand hand)
         {
             // put card onto table
@@ -1367,67 +1250,77 @@ namespace CrazyEights
             _lastCardsPlayed.Add(cardToPlay);
             _undoPointer = _lastCardsPlayed.Count - 1;
 
-            if (cardToPlay.Rank == CardRank.Ace)
+            if (cardToPlay.Rank == SpecialCard.Reverse)
             {
-                if (_direction == Hand.PlayDirection.Forward)
-                {
-                    _direction = Hand.PlayDirection.Reverse;
-                }
-                else
-                {
-                    _direction = Hand.PlayDirection.Forward;
-                }
+                _direction = _direction == Hand.PlayDirection.Forward ? Hand.PlayDirection.Reverse : Hand.PlayDirection.Forward;
             }
-            else if (cardToPlay.Rank == CardRank.Two && !_data.DeckManager.IsEmpty)
+            else if (cardToPlay.Rank == SpecialCard.DrawFour && !_data.DeckManager.IsEmpty)
             {
                 _playerHasDrawn = false;
 
                 // increment the two's count
-                _dueceCount++;
+                //_deuceCount++;
 
                 // draw two
-                int nextPlayer = NextPlayer();
+                var nextPlayer = NextPlayer();
 
                 // get hand of next player
-                CrazyEightsHand nextPlayerHand = null;
+                //var nextPlayerHand = nextPlayer == 0 ? _data.PlayerHand : _data.OpponentsHands[nextPlayer - 1];
+
+                //if (nextPlayerHand.Cards.Find(c => c.Rank == SpecialCard.DrawTwo) != null) return;
+                _lastDrawnCards.Clear();
+
+                for (int i = 0; i < 4; i++)
+                {
+                    DrawCard(nextPlayer, out var drawCard);
+
+                    _lastDrawnCards.Add(drawCard);
+                }
+
+                _playerHasDrawn = true;
+
+                // if next is player and player doesn't have any two's
                 if (nextPlayer == 0)
                 {
-                    nextPlayerHand = _data.PlayerHand;
-                }
-                else
-                {
-                    nextPlayerHand = _data.OpponentsHands[nextPlayer - 1];
+                    ShowDrawFourDialog();
                 }
 
-                if (nextPlayerHand.Cards.Find(c => c.Rank == CardRank.Two) == null)
-                {
-                    _lastDrawnCards.Clear();
-
-                    for (int i = 0; i < _dueceCount; i++)
-                    {
-                        Card drawCard;
-
-                        DrawCard(nextPlayer, out drawCard);
-
-                        _lastDrawnCards.Add(drawCard);
-
-                        DrawCard(nextPlayer, out drawCard);
-
-                        _lastDrawnCards.Add(drawCard);
-                    }
-
-                    _playerHasDrawn = true;
-
-                    // if next is player and player doesn't have any two's
-                    if (nextPlayer == 0)
-                    {
-                        ShowDrawTwoDialog();
-                    }
-
-                    _dueceCount = 0;
-                }
             }
-            else if (cardToPlay.Rank == CardRank.Queen)
+            else if (cardToPlay.Rank == SpecialCard.DrawTwo && !_data.DeckManager.IsEmpty)
+            {
+                _playerHasDrawn = false;
+
+                // increment the two's count
+                //_deuceCount++;
+
+                // draw two
+                var nextPlayer = NextPlayer();
+
+                // get hand of next player
+                //var nextPlayerHand = nextPlayer == 0 ? _data.PlayerHand : _data.OpponentsHands[nextPlayer - 1];
+
+                //if (nextPlayerHand.Cards.Find(c => c.Rank == SpecialCard.DrawTwo) != null) return;
+                _lastDrawnCards.Clear();
+
+                for (int i = 0; i < 2; i++)
+                {
+                    DrawCard(nextPlayer, out var drawCard);
+
+                    _lastDrawnCards.Add(drawCard);
+
+                }
+
+                _playerHasDrawn = true;
+
+                // if next is player and player doesn't have any two's
+                if (nextPlayer == 0)
+                {
+                    ShowDrawTwoDialog();
+                }
+
+                //_deuceCount = 0;
+            }
+            else if (cardToPlay.Rank == SpecialCard.Queen)
             {
                 // trick here, increment player so when
                 // we increment next player, it will skip
@@ -1439,27 +1332,19 @@ namespace CrazyEights
 
         private void EndHand()
         {
-            // force a redraw before displaying messagebox
+            // force a redraw before displaying message box
             Invalidate();
 
             ShowHandWonDialog(_currentPlayer);
 
-            bool winner = false;
+            var winner = false;
 
             // check if top card is a 2, then make sure we subtract last drawn cards from current player
-            Card topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
+            var topCard = _data.DeckManager.Table[_data.DeckManager.Table.Count - 1];
 
-            if (topCard.Rank == CardRank.Two)
+            if (topCard.Rank == SpecialCard.DrawTwo)
             {
-                Hand hand = null;
-                if( _currentPlayer == 0)
-                {
-                    hand = _data.PlayerHand;
-                }
-                else 
-                {
-                    hand = _data.OpponentsHands[_currentPlayer - 1];
-                }
+                Hand hand = _currentPlayer == 0 ? _data.PlayerHand : _data.OpponentsHands[_currentPlayer - 1];
 
                 foreach (var card in _lastDrawnCards)
                 {
@@ -1468,7 +1353,7 @@ namespace CrazyEights
             }
 
             // update scores from each hand
-            for (int i = 0; i < 4; i++)
+            for (var i = 0; i < 4; i++)
             {
                 if (i != _currentPlayer)
                 {
@@ -1478,7 +1363,7 @@ namespace CrazyEights
             }
 
             // now check if anyone is over 500
-            for (int i = 0; i < 4; i++)
+            for (var i = 0; i < 4; i++)
             {
                 if (_scores[i] >= 500)
                 {
@@ -1488,16 +1373,14 @@ namespace CrazyEights
 
             if (winner)
             {
-                int winningPlayer = 0;
-                int lowestScore = 500;
-                for (int i = 0; i < 4; i++)
+                var winningPlayer = 0;
+                var lowestScore = 500;
+                for (var i = 0; i < 4; i++)
                 {
                     // lowest player wins
-                    if (_scores[i] < lowestScore)
-                    {
-                        lowestScore = _scores[i];
-                        winningPlayer = i;
-                    }
+                    if (_scores[i] >= lowestScore) continue;
+                    lowestScore = _scores[i];
+                    winningPlayer = i;
                 }
 
                 ShowGameWonDialog(winningPlayer);
@@ -1509,7 +1392,7 @@ namespace CrazyEights
                 else
                 {
                     _playerWon = false;
-                    _winningOpponnent = winningPlayer - 1;
+                    _winningOpponent = winningPlayer - 1;
                 }
                 _state = GameState.GameOver;
             }
@@ -1527,24 +1410,16 @@ namespace CrazyEights
                 }
 
                 // now start new turn
-                InitalizeHand();
+                InitializeHand();
             }
         }
 
         private int ScoreHand(int handIndex)
         {
-            int score = 0;
-            Card[] cards;
-            if (handIndex == 0)
-            {
-                cards = _data.PlayerHand.Cards.ToArray() ;
-            }
-            else
-            {
-                cards = _data.OpponentsHands[handIndex - 1].Cards.ToArray();
-            }
+            var score = 0;
+            var cards = handIndex == 0 ? _data.PlayerHand.Cards.ToArray() : _data.OpponentsHands[handIndex - 1].Cards.ToArray();
 
-            foreach (Card card in cards)
+            foreach (var card in cards)
             {
                 if ((int)card.Rank > 10)
                 {
@@ -1585,13 +1460,12 @@ namespace CrazyEights
             return rectangle;
         }
 
-        private bool PointInRect(RectangleF rect, Point point)
-        {
-            if (point.X >= rect.X && point.X <= (rect.X + rect.Width) && point.Y >= rect.Y && point.Y <= (rect.Y + rect.Height))
-                return true;
-            else
-                return false;
-        }
+        //private bool PointInRect(RectangleF rect, Point point)
+        //{
+        //    if (point.X >= rect.X && point.X <= (rect.X + rect.Width) && point.Y >= rect.Y && point.Y <= (rect.Y + rect.Height))
+        //        return true;
+        //    return false;
+        //}
 
         //private bool IsPlayerTurnNext()
         //{
@@ -1623,7 +1497,7 @@ namespace CrazyEights
                 int center = _tableCenter; // tableTLC.X + (CardCanvas.DefaultWidth / 2);
 
                 playerCardPoint.X = center - ((((_data.PlayerHand.Cards.Count - 1) * CardSpacing) + CardCanvas.DefaultWidth) / 2);
-                playerCardPoint.Y = PLAYER_ROW;
+                playerCardPoint.Y = PlayerRow;
 
                 // special case if on last card
                 if ((mouseX > (CardSpacing * hand.Length) + playerCardPoint.X) && (mouseX < (CardSpacing * (hand.Length - 1) + playerCardPoint.X) + CardCanvas.DefaultWidth))
@@ -1640,14 +1514,14 @@ namespace CrazyEights
                 {
                     if (_data.PlayerHand.Cards[column].Selected)
                     {
-                        if ((mouseY < playerCardPoint.Y - SELECTED_OFFSET) || (mouseY > playerCardPoint.Y + CardCanvas.DefaultHeight - SELECTED_OFFSET))
+                        if ((mouseY < playerCardPoint.Y - SelectedOffset) || (mouseY > playerCardPoint.Y + CardCanvas.DefaultHeight - SelectedOffset))
                         {
                             column = -1;
                         }
                     }
                     else
                     {
-                        if ((mouseY < playerCardPoint.Y) || (mouseY > playerCardPoint.Y + CardCanvas.DefaultHeight - SELECTED_OFFSET))
+                        if ((mouseY < playerCardPoint.Y) || (mouseY > playerCardPoint.Y + CardCanvas.DefaultHeight - SelectedOffset))
                         {
                             column = -1;
                         }

@@ -10,7 +10,7 @@ namespace WindowsApplication2
     {
         private void OpponentTurn(CrazyEightDeckManager deckManager, Card[] opponentHands, CardSuit suitOverride )
         {
-            AIManager.MoveInfo info;
+            AiManager.MoveInfo info;
 
             //SetPrompt();
             //_prompt = string.Format(Properties.Resources.Text_OpponentTurn, _playerNames[_currentPlayer - 1]);
@@ -248,7 +248,7 @@ namespace WindowsApplication2
         //            _prompt = string.Empty;
 
         //            bool validPlay = false;
-        //            if (cardToPlay.Rank == Card.CardRank.Eight)
+        //            if (cardToPlay.Rank == Card.SpecialCard.WildCard)
         //            {
         //                // display dialog for suit override
         //                _wildCard = true;

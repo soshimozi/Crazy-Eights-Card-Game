@@ -77,6 +77,8 @@
     <Compile Include="CardBack.cs" />
     <Compile Include="CardCanvas.cs" />
     <Compile Include="CardMode.cs" />
+    <Compile Include="SpecialCard.cs" />
+    <Compile Include="CardSuit.cs" />
     <Compile Include="CrazyEightDeckManager.cs" />
     <Compile Include="CrazyEightsHand.cs" />
     <Compile Include="Deck.cs" />

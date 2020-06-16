@@ -194,4 +194,7 @@
         H//wAB//+AA///4A////7/////////////8=
 </value>
   </data>
+  <data name="FrmMain_ShowDrawTwoDialog_Draw_Two_" xml:space="preserve">
+    <value>Draw DrawTwo!</value>
+  </data>
 </root>
